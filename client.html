@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>King Chu Bridge - Online Multiplayer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #2d3436;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            z-index: 1001;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.connected {
+            background: rgba(46, 204, 113, 0.9);
+            color: white;
+        }
+        
+        .connection-status.connecting {
+            background: rgba(255, 193, 7, 0.9);
+            color: white;
+        }
+        
+        .connection-status.disconnected {
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+        }
+        
+        .header {
+            background: rgba(255,255,255,0.95);
+            padding: 12px 20px;
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+            flex: 0 0 auto;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .game-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .round-info, .phase-info, .room-info {
+            background: rgba(103, 126, 234, 0.2);
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .room-info {
+            background: rgba(46, 204, 113, 0.2);
+            cursor: pointer;
+            user-select: all;
+        }
+        
+        .room-info:hover {
+            background: rgba(46, 204, 113, 0.3);
+        }
+        
+        .phase-info.urgent {
+            animation: statusBarShake 1.5s ease-in-out infinite;
+            background: rgba(231, 76, 60, 0.2);
+            border: 2px solid rgba(231, 76, 60, 0.5);
+        }
+        
+        @keyframes countdownPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        
+        @keyframes winnerPulse {
+            0%, 100% { transform: scale(1.1); }
+            50% { transform: scale(1.2); }
+        }
+        
+        @keyframes statusBarShake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+            20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+        
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            gap: 10px;
+            padding: 10px;
+            padding-right: 260px;
+            overflow: hidden;
+            min-height: 0;
+        }
+        
+        .game-board {
+            flex: 1;
+            display: grid;
+            grid-template-areas: 
+                "trump-bidding trump-bidding trump-bidding"
+                "top-player top-player top-player"
+                "left-player trick-area right-player"
+                "bottom-player bottom-player bottom-player";
+            grid-template-columns: 160px 1fr 160px;
+            grid-template-rows: 60px 100px 1fr 140px;
+            gap: 10px;
+            height: 100%;
+        }
+        
+        .player-position {
+            background: rgba(255,255,255,0.15);
+            border-radius: 15px;
+            padding: 12px;
+            border: 3px solid rgba(103, 126, 234, 0.2);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .player-position.current-player {
+            border-color: #ff6b35 !important;
+            box-shadow: 
+                0 0 30px rgba(255, 107, 53, 0.6),
+                inset 0 0 20px rgba(255, 107, 53, 0.1),
+                0 12px 30px rgba(0,0,0,0.2) !important;
+            background: rgba(255, 107, 53, 0.1) !important;
+            animation: playerTurnShake 2s ease-in-out infinite;
+            transform: scale(1.02);
+        }
+        
+        @keyframes playerTurnShake {
+            0%, 100% { transform: scale(1.02) translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: scale(1.02) translateX(-2px); }
+            20%, 40%, 60%, 80% { transform: scale(1.02) translateX(2px); }
+        }
+        
+        .top-player {
+            grid-area: top-player;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 224, 0.9) !important;
+            border-color: rgba(255, 215, 0, 0.8) !important;
+        }
+        
+        .left-player {
+            grid-area: left-player;
+            writing-mode: horizontal-tb;
+            text-orientation: initial;
+            background: rgba(255, 192, 203, 0.9) !important;
+            border-color: rgba(255, 105, 97, 0.8) !important;
+        }
+        
+        .right-player {
+            grid-area: right-player;
+            background: rgba(173, 216, 230, 0.9) !important;
+            border-color: rgba(30, 144, 255, 0.8) !important;
+        }
+        
+        .bottom-player {
+            grid-area: bottom-player;
+            flex-direction: column;
+            background: rgba(144, 238, 144, 0.9) !important;
+            border: 3px solid rgba(50, 205, 50, 0.8) !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-radius: 20px;
+            transform: scale(1.02);
+        }
+        
+        .bottom-player .player-info-compact {
+            background: rgba(50, 205, 50, 0.3) !important;
+            border-radius: 10px;
+            padding: 8px 15px;
+            margin-bottom: 15px;
+            border: 2px solid rgba(50, 205, 50, 0.5) !important;
+            text-align: center;
+        }
+        
+        .bottom-player .player-name-compact {
+            font-size: 1.1em;
+            color: #006400 !important;
+            font-weight: 800;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+        }
+        
+        .bottom-player .player-stats-compact {
+            font-size: 0.9em;
+            opacity: 0.9;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .hand-sort-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        
+        .sort-btn {
+            background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.9));
+            border: 2px solid rgba(50, 205, 50, 0.5);
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #2c3e50;
+        }
+        
+        .sort-btn:hover {
+            background: linear-gradient(135deg, #fff, #f8f9fa);
+            border-color: rgba(50, 205, 50, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sort-btn.active {
+            background: linear-gradient(135deg, rgba(50, 205, 50, 0.9), rgba(46, 204, 113, 0.9));
+            color: white;
+            border-color: rgba(50, 205, 50, 0.8);
+            box-shadow: 0 4px 12px rgba(50, 205, 50, 0.3);
+        }
+        
+        .center-trick-area {
+            grid-area: trick-area;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            padding: 15px;
+            border: 2px solid rgba(103, 126, 234, 0.3);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .center-trick-area h4 {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            margin: 0;
+            color: #495057;
+            font-size: 1.1em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        .trump-bidding-container {
+            grid-area: trump-bidding;
+            display: flex;
+            gap: 10px;
+            height: 100%;
+        }
+        
+        .trump-display {
+            flex: 1;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 2px solid #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            animation: trumpPulse 2s ease-in-out infinite;
+            position: relative;
+        }
+        
+        .bidding-area {
+            flex: 1;
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.95), rgba(255, 152, 0, 0.95));
+            border: 2px solid rgba(255, 193, 7, 0.8);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        
+        .bidding-area.blank {
+            background: #2c3e50 !important;
+            border: 2px solid #34495e !important;
+            color: rgba(255,255,255,0.3) !important;
+        }
+        
+        @keyframes trumpPulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            }
+            50% { 
+                transform: scale(1.02); 
+                box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            }
+        }
+        
+        .trump-suit.red { 
+            color: #ffe066; 
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-size: 2.5em;
+        }
+        .trump-suit.black { 
+            color: #fff; 
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-size: 2.5em;
+        }
+        
+        .bidding-area h4 {
+            color: #333;
+            font-size: 1em;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.3);
+        }
+        
+        .bidding-area.my-turn {
+            border: 4px solid #e74c3c !important;
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.95), rgba(192, 57, 43, 0.95)) !important;
+            animation: shakeBid 1.5s ease-in-out infinite;
+            box-shadow: 0 0 30px rgba(231, 76, 60, 0.6), 0 15px 35px rgba(0,0,0,0.4);
+        }
+        
+        .bidding-area.my-turn h4 {
+            color: white !important;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5) !important;
+        }
+        
+        @keyframes shakeBid {
+            0%, 100% { transform: translateX(0) scale(1); }
+            25% { transform: translateX(-4px) scale(1.02); }
+            75% { transform: translateX(4px) scale(1.02); }
+        }
+        
+        .bid-buttons {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
+        
+        .bid-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+            background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,249,250,0.95));
+            color: #2d3436;
+            transition: all 0.3s ease;
+            min-width: 40px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+            border: 2px solid transparent;
+        }
+        
+        .bid-btn:hover:not(.forbidden) {
+            background: linear-gradient(135deg, #fff, #f8f9fa);
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            border-color: rgba(255, 193, 7, 0.5);
+        }
+        
+        .bid-btn.forbidden {
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.9), rgba(192, 57, 43, 0.9));
+            color: white;
+            cursor: not-allowed;
+            opacity: 0.8;
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+        }
+        
+        .trick-cards-center {
+            display: grid;
+            grid-template-areas: 
+                ". north ."
+                "west center east"
+                ". south .";
+            grid-template-columns: 1fr auto 1fr;
+            grid-template-rows: 1fr auto 1fr;
+            gap: 15px;
+            width: 300px;
+            height: 200px;
+            align-items: center;
+            justify-items: center;
+            margin: 20px auto;
+            position: relative;
+        }
+        
+        .trick-card-center {
+            grid-area: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(103, 126, 234, 0.3), rgba(103, 126, 234, 0.1));
+            border: 2px dashed rgba(103, 126, 234, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            color: rgba(103, 126, 234, 0.7);
+        }
+        
+        .trick-card-center::after {
+            content: "🎴";
+        }
+        
+        .trick-card-north { 
+            grid-area: north; 
+            align-self: start;
+        }
+        .trick-card-east { 
+            grid-area: east;
+            justify-self: end;
+        }
+        .trick-card-south { 
+            grid-area: south;
+            align-self: end;
+        }
+        .trick-card-west { 
+            grid-area: west;
+            justify-self: start;
+        }
+        
+        .trick-card-position {
+            width: 65px;
+            height: 88px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1em;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            border: 2px solid #ffd700;
+            position: relative;
+            transition: all 0.5s ease;
+            transform-style: preserve-3d;
+        }
+        
+        .trick-card-position.winner {
+            animation: cardWinnerPulse 1s ease-in-out infinite;
+            transform: scale(1.2) rotateY(8deg);
+            border: 4px solid #ff6b35;
+            box-shadow: 
+                0 0 30px rgba(255, 107, 53, 0.9),
+                0 12px 25px rgba(0,0,0,0.4);
+            z-index: 100;
+            background: linear-gradient(135deg, #fff, #fff8e7);
+        }
+        
+        @keyframes cardWinnerPulse {
+            0%, 100% { 
+                transform: scale(1.2) rotateY(8deg);
+                filter: brightness(1.2) drop-shadow(0 0 10px rgba(255, 107, 53, 0.8));
+            }
+            50% { 
+                transform: scale(1.3) rotateY(-8deg);
+                filter: brightness(1.4) drop-shadow(0 0 15px rgba(255, 107, 53, 1));
+            }
+        }
+        
+        .player-info-compact {
+            text-align: center;
+            margin-bottom: 5px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 6px 10px;
+        }
+        
+        .player-name-compact {
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+        
+        .player-stats-compact {
+            font-size: 0.75em;
+            opacity: 0.9;
+            font-weight: 600;
+        }
+        
+        .player-cards-horizontal {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 5px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 10px;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .player-cards-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: center;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .card {
+            width: 50px;
+            height: 70px;
+            background: linear-gradient(135deg, #fff, #f8f9fa);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid #e9ecef;
+            font-weight: bold;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+            position: relative;
+            transform-style: preserve-3d;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.8), transparent);
+            border-radius: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+        }
+        
+        .card:hover::before {
+            opacity: 1;
+        }
+        
+        .card-small {
+            width: 35px;
+            height: 50px;
+        }
+        
+        .card .card-value { font-size: 1em; line-height: 1; margin-bottom: 2px; }
+        .card .card-suit { font-size: 1.1em; line-height: 1; }
+        
+        .card-small .card-value { font-size: 0.8em; line-height: 1; margin-bottom: 1px; }
+        .card-small .card-suit { font-size: 1em; line-height: 1; }
+        
+        .card:hover {
+            transform: translateY(-12px) rotateX(8deg) scale(1.05);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            filter: brightness(1.15);
+            border-color: rgba(103, 126, 234, 0.6);
+        }
+        
+        .card.playable {
+            cursor: pointer !important;
+            opacity: 1;
+            animation: cardGlow 2s ease-in-out infinite;
+            border-color: rgba(46, 204, 113, 0.8);
+        }
+        
+        .card.playable:hover {
+            border-color: #27ae60;
+            box-shadow: 0 20px 40px rgba(46, 204, 113, 0.4);
+        }
+        
+        .card.unplayable {
+            cursor: not-allowed !important;
+            opacity: 0.4;
+            filter: grayscale(0.8);
+            border-color: rgba(149, 165, 166, 0.5);
+        }
+        
+        .card.bidding-phase {
+            opacity: 1 !important;
+            filter: none !important;
+        }
+        
+        .card.unplayable:hover {
+            transform: none !important;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2) !important;
+            filter: grayscale(0.8) !important;
+            border-color: rgba(149, 165, 166, 0.5) !important;
+        }
+        
+        @keyframes cardGlow {
+            0%, 100% { 
+                box-shadow: 0 6px 15px rgba(0,0,0,0.2), 0 0 15px rgba(46, 204, 113, 0.6);
+                border-color: rgba(46, 204, 113, 0.8);
+            }
+            50% { 
+                box-shadow: 0 10px 25px rgba(0,0,0,0.3), 0 0 25px rgba(46, 204, 113, 1);
+                border-color: #27ae60;
+            }
+        }
+        
+        .card.red { color: #e74c3c; }
+        .card.black { color: #2c3e50; }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            font-size: 1em;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .chat-panel {
+            position: fixed;
+            right: 10px;
+            top: 70px;
+            bottom: 10px;
+            width: 240px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid rgba(103, 126, 234, 0.2);
+            z-index: 100;
+        }
+        
+        .chat-header {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.15);
+            font-weight: bold;
+            text-align: center;
+            background: rgba(103, 126, 234, 0.1);
+            font-size: 0.9em;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .chat-message {
+            background: rgba(0,0,0,0.08);
+            padding: 6px 8px;
+            border-radius: 8px;
+            max-width: 90%;
+            font-size: 0.75em;
+            word-wrap: break-word;
+        }
+        
+        .chat-message.system {
+            background: rgba(46, 204, 113, 0.2);
+            font-weight: bold;
+        }
+        
+        .chat-message.player {
+            background: rgba(52, 152, 219, 0.2);
+        }
+        
+        .emoji-panel {
+            padding: 6px 8px;
+            border-top: 1px solid rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(103, 126, 234, 0.05);
+        }
+        
+        .emoji-row {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .emoji-btn {
+            background: rgba(255,255,255,0.8);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            cursor: pointer;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .chat-input-area {
+            padding: 8px;
+            border-top: 1px solid rgba(0,0,0,0.15);
+            display: flex;
+            gap: 6px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 6px 8px;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.9);
+            font-size: 0.8em;
+        }
+        
+        .setup-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .setup-panel {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            border-radius: 25px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .setup-input {
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            background: rgba(255,255,255,0.95);
+            color: #333;
+        }
+        
+        .waiting-room {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .player-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .player-slot {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .player-slot.filled {
+            background: rgba(46, 204, 113, 0.3);
+            border: 2px solid rgba(46, 204, 113, 0.6);
+            font-weight: bold;
+        }
+        
+        .player-slot.host {
+            background: rgba(255, 193, 7, 0.3);
+            border: 2px solid rgba(255, 193, 7, 0.6);
+        }
+        
+        .error-message {
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding-right: 10px;
+                padding-bottom: 200px;
+            }
+            .chat-panel {
+                position: fixed;
+                left: 10px;
+                right: 10px;
+                top: auto;
+                bottom: 10px;
+                width: auto;
+                height: 180px;
+            }
+            .game-board {
+                grid-template-columns: 120px 1fr 120px;
+                grid-template-rows: 50px 80px 1fr 100px;
+            }
+            .card {
+                width: 40px;
+                height: 55px;
+            }
+            .card-small {
+                width: 30px;
+                height: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Status -->
+    <div class="connection-status" id="connectionStatus">Connecting...</div>
+
+    <!-- Setup Screen -->
+    <div class="setup-screen" id="setupScreen">
+        <div class="setup-panel">
+            <h2>🎮 King Chu Bridge - Online Multiplayer</h2>
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div id="nameEntry">
+                <p>Enter your name to join the game</p>
+                <input type="text" class="setup-input" id="playerNameInput" placeholder="Your name" maxlength="20">
+                <button class="btn btn-primary" onclick="joinGame()">Join Game</button>
+            </div>
+            
+            <div id="waitingRoom" class="waiting-room" style="display: none;">
+                <h3>Waiting Room</h3>
+                <p>Players: <strong><span id="playerCount">0</span>/4</strong></p>
+                
+                <div class="player-list" id="playerList">
+                    <div class="player-slot" id="slot0">Waiting...</div>
+                    <div class="player-slot" id="slot1">Waiting...</div>
+                    <div class="player-slot" id="slot2">Waiting...</div>
+                    <div class="player-slot" id="slot3">Waiting...</div>
+                </div>
+                
+                <div id="hostControls" style="display: none;">
+                    <button class="btn btn-primary" onclick="startGame()">🎮 Start Game</button>
+                    <p style="font-size: 0.8em; margin-top: 8px; opacity: 0.8;">Need exactly 4 players</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Header -->
+    <div class="header" id="gameHeader" style="display: none;">
+        <div class="game-info">
+            <h1>🎮 King Chu Bridge - Online</h1>
+            <div class="round-info" id="roundInfo">
+                <span>Round: <strong id="currentRound">1</strong>/13</span>
+                <span style="margin-left: 20px;">Cards: <strong id="cardsThisRound">1</strong></span>
+            </div>
+            <div class="phase-info" id="phaseInfo">
+                <span id="gamePhaseDesc">Waiting for players</span>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="leaveGame()">Leave Game</button>
+    </div>
+
+    <!-- Main Game Area -->
+    <div class="main-container" id="mainContainer" style="display: none;">
+        <div class="game-board">
+            <!-- Trump and Bidding Area -->
+            <div class="trump-bidding-container">
+                <!-- Trump Display -->
+                <div class="trump-display" id="trumpDisplay">
+                    <div style="font-size: 0.7em; margin-bottom: 3px; opacity: 0.9;">🏆 TRUMP SUIT</div>
+                    <div id="trumpSuit" class="trump-suit">♠</div>
+                </div>
+
+                <!-- Bidding Area -->
+                <div class="bidding-area" id="biddingArea">
+                    <h4>🎯 Make Your Bid</h4>
+                    <div class="bid-buttons" id="bidButtons"></div>
+                </div>
+            </div>
+
+            <!-- Top Player (North) -->
+            <div class="player-position top-player" id="northPlayer">
+                <div class="player-info-compact">
+                    <div class="player-name-compact" id="northPlayerName">North</div>
+                    <div class="player-stats-compact">
+                        Score: <span id="northPlayerScore">0</span> | 
+                        Bid: <span id="northPlayerBid">?</span> | 
+                        Tricks: <span id="northPlayerTricks">0</span>
+                    </div>
+                </div>
+                <div class="player-cards-horizontal" id="northPlayerCards"></div>
+            </div>
+
+            <!-- Left Player (West) -->
+            <div class="player-position left-player" id="westPlayer">
+                <div class="player-info-compact">
+                    <div class="player-name-compact" id="westPlayerName">West</div>
+                    <div class="player-stats-compact">
+                        Score: <span id="westPlayerScore">0</span><br>
+                        Bid: <span id="westPlayerBid">?</span><br>
+                        Tricks: <span id="westPlayerTricks">0</span>
+                    </div>
+                </div>
+                <div class="player-cards-vertical" id="westPlayerCards"></div>
+            </div>
+
+            <!-- Center Trick Area -->
+            <div class="center-trick-area" id="centerTrickArea">
+                <h4>🎴 Current Trick</h4>
+                <div class="trick-cards-center" id="trickCardsCenter">
+                    <div class="trick-card-center"></div>
+                </div>
+                <div id="trickCountdown" style="position: absolute; top: 10px; right: 10px; display: none;"></div>
+            </div>
+
+            <!-- Right Player (East) -->
+            <div class="player-position right-player" id="eastPlayer">
+                <div class="player-info-compact">
+                    <div class="player-name-compact" id="eastPlayerName">East</div>
+                    <div class="player-stats-compact">
+                        Score: <span id="eastPlayerScore">0</span><br>
+                        Bid: <span id="eastPlayerBid">?</span><br>
+                        Tricks: <span id="eastPlayerTricks">0</span>
+                    </div>
+                </div>
+                <div class="player-cards-vertical" id="eastPlayerCards"></div>
+            </div>
+
+            <!-- Bottom Player (South - You) -->
+            <div class="player-position bottom-player" id="southPlayer">
+                <div class="player-info-compact">
+                    <div class="player-name-compact" id="southPlayerName">You</div>
+                    <div class="player-stats-compact">
+                        Score: <span id="southPlayerScore">0</span> | 
+                        Bid: <span id="southPlayerBid">?</span> | 
+                        Tricks: <span id="southPlayerTricks">0</span>
+                    </div>
+                </div>
+                <div class="hand-sort-buttons">
+                    <button class="sort-btn active" id="suitBtn" onclick="setSortMode('suit')">Suit</button>
+                    <button class="sort-btn" id="numberBtn" onclick="setSortMode('number')">Num</button>
+                </div>
+                <div class="player-cards-horizontal" id="southPlayerCards"></div>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="chat-panel">
+            <div class="chat-header">💬 Game Chat</div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="emoji-panel">
+                <div class="emoji-row">
+                    <button class="emoji-btn" onclick="sendEmoji('😀')">😀</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😊')">😊</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😎')">😎</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🤔')">🤔</button>
+                </div>
+                <div class="emoji-row">
+                    <button class="emoji-btn" onclick="sendEmoji('😢')">😢</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😡')">😡</button>
+                    <button class="emoji-btn" onclick="sendEmoji('😱')">😱</button>
+                    <button class="emoji-btn" onclick="sendEmoji('🥳')">🥳</button>
+                    <button class="emoji-btn" onclick="sendEmoji('👍')">👍</button>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." maxlength="100">
+                <button class="btn btn-primary" onclick="sendChat()" style="padding: 6px 12px; font-size: 0.8em;">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // COMPLETE KING CHU BRIDGE CLIENT
+        // ========================================
+        
+        // Connection Management
+        let ws = null;
+        let playerInfo = {
+            id: null,
+            name: '',
+            index: -1,
+            isHost: false,
+            handSortMode: 'suit'
+        };
+        let gameState = null;
+        let myHand = [];
+        let audioContext = null;
+        
+        console.log('🎮 King Chu Bridge Online Client Starting...');
+        
+        // ================================
+        // AUDIO SYSTEM
+        // ================================
+        
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.log('Audio not supported');
+            }
+        }
+        
+        function playSound(type) {
+            if (!audioContext) return;
+            
+            const sounds = {
+                bid: { freq: 523, duration: 200, volume: 0.15 },
+                card: { freq: 659, duration: 150, volume: 0.12 },
+                phase: { freq: 784, duration: 300, volume: 0.18 },
+                error: { freq: 220, duration: 500, volume: 0.2 },
+                success: { freq: 880, duration: 300, volume: 0.15 },
+                winner: { freq: 440, duration: 150, volume: 0.1 },
+                trump: { freq: 698, duration: 600, volume: 0.2 }
+            };
+            
+            const sound = sounds[type];
+            if (!sound) return;
+            
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(sound.freq, audioContext.currentTime);
+                oscillator.type = type === 'winner' ? 'sawtooth' : 'sine';
+                
+                gainNode.gain.setValueAtTime(sound.volume, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + sound.duration / 1000);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + sound.duration / 1000);
+                
+                if (type === 'winner') {
+                    setTimeout(() => {
+                        const harmony = audioContext.createOscillator();
+                        const harmonyGain = audioContext.createGain();
+                        harmony.connect(harmonyGain);
+                        harmonyGain.connect(audioContext.destination);
+                        harmony.frequency.setValueAtTime(sound.freq * 1.5, audioContext.currentTime);
+                        harmonyGain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        harmonyGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 200 / 1000);
+                        harmony.start();
+                        harmony.stop(audioContext.currentTime + 200 / 1000);
+                    }, 100);
+                }
+            } catch (e) {
+                console.log('Sound error:', e.message);
+            }
+        }
+        
+        // ================================
+        // CONNECTION MANAGEMENT
+        // ================================
+        
+        function connectToServer() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            console.log(`🔌 Connecting to: ${wsUrl}`);
+            updateConnectionStatus('connecting');
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('✅ Connected to server');
+                updateConnectionStatus('connected');
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleServerMessage(data);
+                } catch (error) {
+                    console.error('❌ Error parsing message:', error);
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('❌ Connection closed');
+                updateConnectionStatus('disconnected');
+                showError('Connection lost. Please refresh to reconnect.');
+            };
+            
+            ws.onerror = function(error) {
+                console.error('❌ WebSocket error:', error);
+                updateConnectionStatus('disconnected');
+                showError('Failed to connect to server');
+            };
+        }
+        
+        function handleServerMessage(data) {
+            console.log(`📨 Received: ${data.type}`);
+            
+            switch (data.type) {
+                case 'join_success':
+                    handleJoinSuccess(data);
+                    break;
+                    
+                case 'game_state':
+                    handleGameState(data);
+                    break;
+                    
+                case 'chat':
+                    handleChat(data);
+                    break;
+                    
+                case 'error':
+                    showError(data.message);
+                    playSound('error');
+                    break;
+                    
+                default:
+                    console.warn('🤷‍♂️ Unknown message type:', data.type);
+            }
+        }
+        
+        function handleJoinSuccess(data) {
+            playerInfo.id = data.playerId;
+            playerInfo.index = data.playerIndex;
+            playerInfo.isHost = data.isHost;
+            
+            console.log(`✅ Joined as player ${data.playerIndex + 1}${data.isHost ? ' (HOST)' : ''}`);
+            playSound('success');
+            
+            document.getElementById('nameEntry').style.display = 'none';
+            document.getElementById('waitingRoom').style.display = 'block';
+            
+            if (data.isHost) {
+                document.getElementById('hostControls').style.display = 'block';
+            }
+        }
+        
+        function handleGameState(data) {
+            gameState = data.gameState;
+            myHand = data.myHand || [];
+            
+            // Check if game started
+            if (gameState.gameStarted && document.getElementById('setupScreen').style.display !== 'none') {
+                document.getElementById('setupScreen').style.display = 'none';
+                document.getElementById('gameHeader').style.display = 'block';
+                document.getElementById('mainContainer').style.display = 'flex';
+                playSound('phase');
+            }
+            
+            updateGameDisplay();
+        }
+        
+        function handleChat(data) {
+            addChatMessage(data.messageType, data.message);
+        }
+        
+        // ================================
+        // GAME ACTIONS
+        // ================================
+        
+        function joinGame() {
+            const nameInput = document.getElementById('playerNameInput');
+            const playerName = nameInput.value.trim();
+            
+            if (!playerName) {
+                showError('Please enter your name');
+                return;
+            }
+            
+            if (playerName.length > 20) {
+                showError('Name must be 20 characters or less');
+                return;
+            }
+            
+            playerInfo.name = playerName;
+            initAudio();
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    playerName: playerName
+                }));
+            } else {
+                showError('Not connected to server');
+            }
+        }
+        
+        function startGame() {
+            if (!playerInfo.isHost) {
+                showError('Only the host can start the game');
+                return;
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'start_game'
+                }));
+            } else {
+                showError('Not connected to server');
+            }
+        }
+        
+        function makeBid(amount) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'bid',
+                    amount: amount
+                }));
+                playSound('bid');
+            }
+        }
+        
+        function playCard(card) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'play_card',
+                    card: card
+                }));
+                playSound('card');
+                
+                // Visual feedback
+                const body = document.body;
+                const originalBg = body.style.background;
+                body.style.background = 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)';
+                setTimeout(() => {
+                    body.style.background = originalBg || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                }, 150);
+            }
+        }
+        
+        function leaveGame() {
+            if (ws) {
+                ws.close();
+            }
+            
+            // Reset to setup screen
+            document.getElementById('setupScreen').style.display = 'flex';
+            document.getElementById('gameHeader').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'none';
+            document.getElementById('nameEntry').style.display = 'block';
+            document.getElementById('waitingRoom').style.display = 'none';
+            
+            // Reset state
+            gameState = null;
+            myHand = [];
+            playerInfo = {
+                id: null,
+                name: '',
+                index: -1,
+                isHost: false,
+                handSortMode: 'suit'
+            };
+            
+            updateConnectionStatus('disconnected');
+        }
+        
+        // ================================
+        // GAME LOGIC
+        // ================================
+        
+        function getForbiddenBid() {
+            if (!gameState || !gameState.round) return -1;
+            
+            const currentBids = [];
+            gameState.players.forEach(player => {
+                const bid = gameState.bids[player.id];
+                if (bid !== null && bid !== undefined) {
+                    currentBids.push(bid);
+                }
+            });
+            
+            const totalCurrentBids = currentBids.reduce((sum, bid) => sum + bid, 0);
+            const remainingPlayers = 4 - currentBids.length;
+            
+            if (remainingPlayers === 1) {
+                const forbiddenValue = gameState.round - totalCurrentBids;
+                return (forbiddenValue >= 0 && forbiddenValue <= gameState.round) ? forbiddenValue : -1;
+            }
+            
+            return -1;
+        }
+        
+        function isCardPlayable(card) {
+            if (!gameState || !gameState.leadSuit) return true; // First card of trick
+            
+            const leadSuit = gameState.leadSuit;
+            if (card.suit === leadSuit) return true; // Following suit
+            
+            // Check if player has cards of lead suit
+            const hasLeadSuit = myHand.some(c => c.suit === leadSuit);
+            return !hasLeadSuit; // Can play any card if can't follow suit
+        }
+        
+        function setSortMode(mode) {
+            if (playerInfo.handSortMode !== mode) {
+                playerInfo.handSortMode = mode;
+                playSound('success');
+                
+                // Update button states
+                document.getElementById('suitBtn').classList.toggle('active', mode === 'suit');
+                document.getElementById('numberBtn').classList.toggle('active', mode === 'number');
+                
+                updateGameDisplay();
+            }
+        }
+        
+        // ================================
+        // UI UPDATES
+        // ================================
+        
+        function updateGameDisplay() {
+            if (!gameState) return;
+            
+            updateWaitingRoom();
+            
+            if (gameState.gameStarted) {
+                updateHeader();
+                updateTrumpDisplay();
+                updateBiddingArea();
+                updateAllPlayers();
+                updateTrickDisplay();
+            }
+        }
+        
+        function updateWaitingRoom() {
+            if (!gameState.gameStarted) {
+                document.getElementById('playerCount').textContent = gameState.playerCount || 0;
+                
+                // Update player slots
+                for (let i = 0; i < 4; i++) {
+                    const slot = document.getElementById(`slot${i}`);
+                    if (i < gameState.players.length) {
+                        const player = gameState.players[i];
+                        slot.textContent = player.name + (player.isHost ? ' 👑' : '');
+                        slot.className = `player-slot filled ${player.isHost ? 'host' : ''}`;
+                    } else {
+                        slot.textContent = 'Waiting...';
+                        slot.className = 'player-slot';
+                    }
+                }
+                
+                // Show/hide start button
+                const hostControls = document.getElementById('hostControls');
+                if (playerInfo.isHost && gameState.playerCount === 4) {
+                    hostControls.style.display = 'block';
+                } else {
+                    hostControls.style.display = 'none';
+                }
+            }
+        }
+        
+        function updateHeader() {
+            document.getElementById('currentRound').textContent = gameState.round || 1;
+            document.getElementById('cardsThisRound').textContent = gameState.round || 1;
+            document.getElementById('gamePhaseDesc').textContent = getPhaseDescription();
+            
+            // Update phase styling
+            const phaseInfo = document.getElementById('phaseInfo');
+            if (gameState.phase === 'bidding' && gameState.currentPlayer === playerInfo.index) {
+                phaseInfo.classList.add('urgent');
+            } else {
+                phaseInfo.classList.remove('urgent');
+            }
+        }
+        
+        function getPhaseDescription() {
+            switch (gameState.phase) {
+                case 'dealing': 
+                    return '🎴 Dealing cards...';
+                case 'bidding': 
+                    const currentPlayerName = gameState.players[gameState.currentPlayer]?.name || 'Unknown';
+                    return gameState.currentPlayer === playerInfo.index ? 
+                        '🎯 Your turn to bid!' : `🎯 ${currentPlayerName} is bidding...`;
+                case 'playing':
+                    const playingPlayerName = gameState.players[gameState.currentPlayer]?.name || 'Unknown';
+                    return gameState.currentPlayer === playerInfo.index ? 
+                        '🎴 Your turn to play!' : `🎴 ${playingPlayerName} is playing...`;
+                case 'trick_winner_display':
+                    const winnerName = gameState.players[gameState.trickWinnerIndex]?.name || 'Unknown';
+                    const countdown = gameState.trickCountdown || 0;
+                    return `🏆 ${winnerName} wins! (${countdown}s)`;
+                case 'round_complete': 
+                    return `🏁 Round ${gameState.round} complete`;
+                case 'game_complete': 
+                    return '🏆 Game finished!';
+                default: 
+                    return 'Playing...';
+            }
+        }
+        
+        function updateTrumpDisplay() {
+            const trumpSuit = gameState.dynamicTrump || gameState.trump;
+            const trumpEl = document.getElementById('trumpSuit');
+            
+            if (gameState.round === 13 && !gameState.dynamicTrump) {
+                trumpEl.textContent = '🌟';
+                trumpEl.className = 'trump-suit';
+                trumpEl.style.fontSize = '2em';
+            } else if (trumpSuit) {
+                trumpEl.textContent = trumpSuit;
+                trumpEl.className = `trump-suit ${['♥', '♦'].includes(trumpSuit) ? 'red' : 'black'}`;
+                trumpEl.style.fontSize = '2.5em';
+                
+                if (gameState.round === 13 && gameState.dynamicTrump) {
+                    playSound('trump');
+                }
+            } else {
+                trumpEl.textContent = 'NONE';
+                trumpEl.className = 'trump-suit';
+                trumpEl.style.fontSize = '1.2em';
+            }
+        }
+        
+        function updateBiddingArea() {
+            const biddingArea = document.getElementById('biddingArea');
+            const buttonsContainer = document.getElementById('bidButtons');
+            
+            if (gameState.phase === 'bidding') {
+                biddingArea.style.display = 'flex';
+                biddingArea.classList.remove('blank');
+                
+                if (gameState.currentPlayer === playerInfo.index) {
+                    biddingArea.classList.add('my-turn');
+                    biddingArea.querySelector('h4').textContent = '🎯 Make Your Bid';
+                    
+                    buttonsContainer.innerHTML = '';
+                    const maxBid = gameState.round;
+                    const forbiddenBid = getForbiddenBid();
+                    
+                    for (let i = 0; i <= maxBid; i++) {
+                        const btn = document.createElement('button');
+                        btn.className = 'bid-btn';
+                        btn.textContent = i;
+                        btn.onclick = () => makeBid(i);
+                        
+                        if (i === forbiddenBid && forbiddenBid !== -1) {
+                            btn.classList.add('forbidden');
+                            btn.onclick = null;
+                            btn.title = 'This bid is not allowed';
+                        }
+                        
+                        buttonsContainer.appendChild(btn);
+                    }
+                } else {
+                    biddingArea.classList.remove('my-turn');
+                    const currentPlayerName = gameState.players[gameState.currentPlayer]?.name || 'Unknown';
+                    biddingArea.querySelector('h4').textContent = `${currentPlayerName} is bidding...`;
+                    buttonsContainer.innerHTML = '';
+                }
+            } else {
+                biddingArea.style.display = 'none';
+            }
+        }
+        
+        function updateAllPlayers() {
+            const positions = ['north', 'east', 'south', 'west'];
+            
+            // Clear all highlights
+            positions.forEach(pos => {
+                const element = document.getElementById(`${pos}Player`);
+                if (element) element.classList.remove('current-player');
+            });
+            
+            // Update each player
+            gameState.players.forEach((player, index) => {
+                const isMe = (index === playerInfo.index);
+                const positionIndex = (index - playerInfo.index + 4) % 4;
+                const position = positions[positionIndex];
+                
+                // Update player info
+                document.getElementById(`${position}PlayerName`).textContent = 
+                    isMe ? playerInfo.name : player.name;
+                document.getElementById(`${position}PlayerScore`).textContent = 
+                    gameState.scores[player.id] || 0;
+                document.getElementById(`${position}PlayerBid`).textContent = 
+                    gameState.bids[player.id] !== null && gameState.bids[player.id] !== undefined ? gameState.bids[player.id] : '?';
+                document.getElementById(`${position}PlayerTricks`).textContent = 
+                    gameState.tricksWon[player.id] || 0;
+                
+                // Highlight current player
+                if (gameState.currentPlayer === index) {
+                    document.getElementById(`${position}Player`).classList.add('current-player');
+                }
+                
+                // Update cards
+                updatePlayerCards(position, isMe);
+            });
+        }
+        
+        function updatePlayerCards(position, isMe) {
+            const cardsContainer = document.getElementById(`${position}PlayerCards`);
+            cardsContainer.innerHTML = '';
+            
+            if (isMe && myHand.length > 0) {
+                // Sort cards
+                let sortedHand = [...myHand];
+                if (playerInfo.handSortMode === 'suit') {
+                    const suitOrder = { '♠': 1, '♥': 2, '♦': 3, '♣': 4 };
+                    sortedHand.sort((a, b) => {
+                        if (suitOrder[a.suit] !== suitOrder[b.suit]) {
+                            return suitOrder[a.suit] - suitOrder[b.suit];
+                        }
+                        return a.numValue - b.numValue;
+                    });
+                } else {
+                    const suitOrder = { '♠': 1, '♥': 2, '♦': 3, '♣': 4 };
+                    sortedHand.sort((a, b) => {
+                        if (a.numValue !== b.numValue) {
+                            return a.numValue - b.numValue;
+                        }
+                        return suitOrder[a.suit] - suitOrder[b.suit];
+                    });
+                }
+                
+                const isMyTurn = (gameState.currentPlayer === playerInfo.index);
+                const isPlayingPhase = (gameState.phase === 'playing');
+                const isBiddingPhase = (gameState.phase === 'bidding');
+                
+                sortedHand.forEach((card) => {
+                    const cardEl = createCardElement(card);
+                    if (position !== 'south') cardEl.classList.add('card-small');
+                    
+                    cardEl.classList.remove('unplayable', 'playable', 'bidding-phase');
+                    cardEl.onclick = null;
+                    
+                    if (isBiddingPhase) {
+                        cardEl.classList.add('bidding-phase');
+                    } else if (isMyTurn && isPlayingPhase) {
+                        if (isCardPlayable(card)) {
+                            cardEl.classList.add('playable');
+                            cardEl.onclick = () => playCard(card);
+                        } else {
+                            cardEl.classList.add('unplayable');
+                        }
+                    } else {
+                        cardEl.classList.add('unplayable');
+                    }
+                    
+                    cardsContainer.appendChild(cardEl);
+                });
+            }
+        }
+        
+        function updateTrickDisplay() {
+            const container = document.getElementById('trickCardsCenter');
+            const positions = ['north', 'east', 'south', 'west'];
+            
+            // Clear all positions
+            positions.forEach(pos => {
+                const existing = container.querySelector(`.trick-card-${pos}`);
+                if (existing) existing.remove();
+            });
+            
+            const shouldShowTricks = (
+                gameState.currentTrick && 
+                gameState.currentTrick.length > 0 && 
+                (gameState.phase === 'playing' || 
+                 (gameState.phase === 'trick_winner_display' && gameState.trickCountdown > 0))
+            );
+            
+            if (shouldShowTricks) {
+                gameState.currentTrick.forEach((cardData) => {
+                    const playerIndex = cardData.playerIndex;
+                    const relativePosition = (playerIndex - playerInfo.index + 4) % 4;
+                    const position = positions[relativePosition];
+                    
+                    const cardEl = createCardElement(cardData.card);
+                    cardEl.className += ` trick-card-position trick-card-${position}`;
+                    
+                    // Highlight winning card
+                    if (gameState.phase === 'trick_winner_display' && 
+                        gameState.trickCountdown > 0 &&
+                        gameState.trickWinnerIndex === cardData.playerIndex) {
+                        cardEl.classList.add('winner');
+                        playSound('winner');
+                    }
+                    
+                    container.appendChild(cardEl);
+                });
+            } else {
+                container.innerHTML = '<div class="trick-card-center"></div>';
+            }
+            
+            // Update countdown
+            const countdownEl = document.getElementById('trickCountdown');
+            if (gameState.phase === 'trick_winner_display' && 
+                gameState.trickCountdown > 0) {
+                countdownEl.style.display = 'block';
+                countdownEl.style.cssText += `
+                    background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 193, 7, 0.95));
+                    color: #333;
+                    padding: 12px 18px;
+                    border-radius: 25px;
+                    font-size: 1.4em;
+                    font-weight: bold;
+                    animation: countdownPulse 1s ease-in-out infinite;
+                    border: 3px solid rgba(255, 193, 7, 0.8);
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+                `;
+                countdownEl.textContent = `${gameState.trickCountdown}s`;
+            } else {
+                countdownEl.style.display = 'none';
+            }
+        }
+        
+        function createCardElement(card) {
+            const cardEl = document.createElement('div');
+            cardEl.className = `card ${['♥', '♦'].includes(card.suit) ? 'red' : 'black'}`;
+            
+            const valueEl = document.createElement('div');
+            valueEl.className = 'card-value';
+            valueEl.textContent = card.value;
+            
+            const suitEl = document.createElement('div');
+            suitEl.className = 'card-suit';
+            suitEl.textContent = card.suit;
+            
+            cardEl.appendChild(valueEl);
+            cardEl.appendChild(suitEl);
+            
+            return cardEl;
+        }
+        
+        // ================================
+        // CHAT SYSTEM
+        // ================================
+        
+        function sendChat() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'chat',
+                    message: message
+                }));
+                input.value = '';
+                playSound('success');
+            }
+        }
+        
+        function sendEmoji(emoji) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'emoji',
+                    emoji: emoji
+                }));
+                playSound('success');
+            }
+        }
+        
+        function addChatMessage(type, message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = `chat-message ${type}`;
+            
+            // Handle HTML content in system messages
+            if (type === 'system' && message.includes('\n')) {
+                // Replace newlines with <br> for system messages
+                messageEl.innerHTML = message.replace(/\n/g, '<br>');
+            } else {
+                messageEl.textContent = message;
+            }
+            
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Keep only last 50 messages
+            while (chatMessages.children.length > 50) {
+                chatMessages.removeChild(chatMessages.firstChild);
+            }
+        }
+        
+        // ================================
+        // UTILITY FUNCTIONS
+        // ================================
+        
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = `connection-status ${status}`;
+            
+            switch(status) {
+                case 'connected':
+                    statusEl.textContent = '🟢 Connected';
+                    break;
+                case 'connecting':
+                    statusEl.textContent = '🟡 Connecting...';
+                    break;
+                case 'disconnected':
+                    statusEl.textContent = '🔴 Disconnected';
+                    break;
+            }
+        }
+        
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            
+            console.error('❌ Error:', message);
+            
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        }
+        
+        // ================================
+        // EVENT LISTENERS
+        // ================================
+        
+        document.getElementById('chatInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChat();
+            }
+        });
+        
+        document.getElementById('playerNameInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinGame();
+            }
+        });
+        
+        // ================================
+        // INITIALIZATION
+        // ================================
+        
+        // Connect when page loads
+        window.addEventListener('load', function() {
+            console.log('🚀 Page loaded, connecting to server...');
+            connectToServer();
+        });
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', function() {
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        // Update trick display when game state changes
+        setInterval(() => {
+            if (gameState && gameState.gameStarted) {
+                updateTrickDisplay();
+            }
+        }, 100);
+        
+        console.log('🎮 King Chu Bridge Online Client Ready!');
+        console.log('🎯 Full integration with all original features');
+        console.log('🔊 Audio system enabled');
+        console.log('🎴 Card animations and effects included');
+        console.log('🏆 Complete scoring and round progression');
+        console.log('💬 Real-time chat and emoji system');
+        console.log('🌐 Ready for real multiplayer action!');
+    </script>
+</body>
+</html>
