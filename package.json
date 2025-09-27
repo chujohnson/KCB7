@@ -1,5 +1,14 @@
 {
+  "name": "kc-bridge-online",
+  "version": "1.0.0",
+  "description": "KC Bridge Online Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
   "dependencies": {
-    "ws": "^8.18.3"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
   }
 }
