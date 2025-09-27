@@ -314,10 +314,35 @@ function handleStartGame(ws) {
 function initializeGame() {
     gameState.gameStarted = true;
     gameState.round = 1;
-    // For Round 1: Random player starts
-    gameState.roundStartPlayer = Math.floor(Math.random() * 4);
+    
+    // More robust random selection with multiple attempts if needed
+    let attempts = 0;
+    let selectedPlayerIndex;
+    
+    do {
+        const randomValue = Math.random();
+        selectedPlayerIndex = Math.floor(randomValue * 4);
+        attempts++;
+        
+        console.log(`🎲 Random attempt ${attempts}:`);
+        console.log(`   Math.random(): ${randomValue}`);
+        console.log(`   Result: ${selectedPlayerIndex}`);
+        
+        // Force different result if we keep getting 0 (shouldn't be necessary, but just in case)
+        if (attempts > 1 && selectedPlayerIndex === 0) {
+            selectedPlayerIndex = Date.now() % 4; // Use timestamp as fallback
+            console.log(`   🔄 Fallback to timestamp method: ${selectedPlayerIndex}`);
+            break;
+        }
+    } while (attempts < 2); // Only try twice max
+    
+    gameState.roundStartPlayer = selectedPlayerIndex;
     gameState.biddingStartPlayer = gameState.roundStartPlayer;
     gameState.currentPlayer = gameState.roundStartPlayer;
+    
+    // Additional verification
+    const selectedPlayer = gameState.players[gameState.roundStartPlayer];
+    console.log(`🎯 Selected first bidder: Player ${gameState.roundStartPlayer} (${selectedPlayer.name})`);
     
     // Initialize player data
     gameState.players.forEach(player => {
@@ -332,6 +357,7 @@ function initializeGame() {
     
     broadcastChat('system', '🎮 Game started! Good luck everyone!');
 }
+
 
 function dealCards() {
     if (gameState.dealing) return;

@@ -1058,22 +1058,92 @@
             }
         }
         
-        function playSound(type) {
-            if (!audioContext) return;
-            
-            const sounds = {
-                bid: { freq: 523, duration: 200, volume: 0.15 },
-                card: { freq: 659, duration: 150, volume: 0.12 },
-                phase: { freq: 784, duration: 300, volume: 0.18 },
-                error: { freq: 220, duration: 500, volume: 0.2 },
-                success: { freq: 880, duration: 300, volume: 0.15 },
-                winner: { freq: 440, duration: 150, volume: 0.1 },
-                trump: { freq: 698, duration: 600, volume: 0.2 }
-            };
-            
-            const sound = sounds[type];
-            if (!sound) return;
-            
+function playSound(type) {
+    if (!audioContext) return;
+    
+    const sounds = {
+        bid: { freq: 523, duration: 200, volume: 0.15 },
+        card: { freq: 659, duration: 150, volume: 0.12 },
+        phase: { freq: 784, duration: 300, volume: 0.18 },
+        error: { freq: 220, duration: 500, volume: 0.2 },
+        success: { freq: 880, duration: 300, volume: 0.15 },
+        winner: { freq: 523, duration: 300, volume: 0.05 }, // High ding for "ding ding" sound
+        trump: { freq: 698, duration: 600, volume: 0.2 },
+        turnChange: { freq: 392, duration: 200, volume: 0.1 }, // G4 - neutral turn sound
+        myTurn: { freq: 659, duration: 300, volume: 0.15 } // E5 - uplifting "your turn" sound
+    };
+    
+    const sound = sounds[type];
+    if (!sound) return;
+    
+    try {
+        // Special handling for winner sound - cheerful ascending chime
+        if (type === 'winner') {
+            playCheerfulWinnerSound(sound);
+            return;
+        }
+        
+        // Special handling for my turn - gentle ascending notes
+        if (type === 'myTurn') {
+            playMyTurnSound(sound);
+            return;
+        }
+        
+        // Regular sounds
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(sound.freq, audioContext.currentTime);
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(sound.volume, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + sound.duration / 1000);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + sound.duration / 1000);
+        
+    } catch (e) {
+        console.log('Sound error:', e.message);
+    }
+}
+
+// Subtle, pleasant "trick won" notification - much less annoying
+function playCheerfulWinnerSound(sound) {
+    // Single gentle chime instead of ascending notes
+    try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Softer, warmer frequency - not too high or piercing
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 - pleasant middle tone
+        oscillator.type = 'triangle'; // Gentle waveform
+        
+        // Much quieter and shorter
+        gainNode.gain.setValueAtTime(sound.volume * 0.4, audioContext.currentTime); // Even quieter
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.02); // Shorter duration
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.02);
+        
+    } catch (e) {
+        console.log('Winner sound error:', e.message);
+    }
+}
+
+
+// Gentle "your turn" notification
+function playMyTurnSound(sound) {
+    const notes = [523, 659]; // C5 to E5 - gentle upward
+    const noteDuration = 150;
+    
+    notes.forEach((freq, index) => {
+        setTimeout(() => {
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -1081,33 +1151,26 @@
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
                 
-                oscillator.frequency.setValueAtTime(sound.freq, audioContext.currentTime);
-                oscillator.type = type === 'winner' ? 'sawtooth' : 'sine';
+                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+                oscillator.type = 'triangle';
                 
-                gainNode.gain.setValueAtTime(sound.volume, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + sound.duration / 1000);
+                gainNode.gain.setValueAtTime(sound.volume * 0.9, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + noteDuration / 1000);
                 
                 oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + sound.duration / 1000);
-                
-                if (type === 'winner') {
-                    setTimeout(() => {
-                        const harmony = audioContext.createOscillator();
-                        const harmonyGain = audioContext.createGain();
-                        harmony.connect(harmonyGain);
-                        harmonyGain.connect(audioContext.destination);
-                        harmony.frequency.setValueAtTime(sound.freq * 1.5, audioContext.currentTime);
-                        harmonyGain.gain.setValueAtTime(0.1, audioContext.currentTime);
-                        harmonyGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 200 / 1000);
-                        harmony.start();
-                        harmony.stop(audioContext.currentTime + 200 / 1000);
-                    }, 100);
-                }
+                oscillator.stop(audioContext.currentTime + noteDuration / 1000);
             } catch (e) {
-                console.log('Sound error:', e.message);
+                console.log('My turn sound error:', e.message);
             }
-        }
-        
+        }, index * 100);
+    });
+}        
+
+
+
+
+
+
         // ================================
         // CONNECTION MANAGEMENT
         // ================================
