@@ -465,7 +465,7 @@
             justify-content: center;
             align-items: center;
             font-weight: bold;
-            font-size: 1.1em;
+            font-size: 1.6em;
             box-shadow: 0 4px 12px rgba(0,0,0,0.25);
             border: 2px solid #ffd700;
             position: relative;
@@ -577,12 +577,27 @@
             height: 50px;
         }
         
-        .card .card-value { font-size: 1em; line-height: 1; margin-bottom: 2px; }
-        .card .card-suit { font-size: 1.1em; line-height: 1; }
+        .card .card-value { font-size: 1.4em; line-height: 1; margin-bottom: 2px; }
+        .card .card-suit { font-size: 1.4em; line-height: 1; }
         
         .card-small .card-value { font-size: 0.8em; line-height: 1; margin-bottom: 1px; }
         .card-small .card-suit { font-size: 1em; line-height: 1; }
-        
+   
+
+/* ADD THESE LINES HERE */
+.top-player .card .card-value { 
+    font-size: 1.4em; 
+    line-height: 1; 
+    margin-bottom: 2px; 
+}
+
+.top-player .card .card-suit { 
+    font-size: 1.4em; 
+    line-height: 1; 
+}
+/* END OF NEW CODE */
+
+     
         .card:hover {
             transform: translateY(-12px) rotateX(8deg) scale(1.05);
             box-shadow: 0 20px 40px rgba(0,0,0,0.4);
@@ -1067,7 +1082,7 @@ function playSound(type) {
         phase: { freq: 784, duration: 300, volume: 0.18 },
         error: { freq: 220, duration: 500, volume: 0.2 },
         success: { freq: 880, duration: 300, volume: 0.15 },
-        winner: { freq: 523, duration: 300, volume: 0.05 }, // High ding for "ding ding" sound
+         winner: { freq: 880, duration: 80, volume: 0.02 },  // High ding for "ding ding" sound
         trump: { freq: 698, duration: 600, volume: 0.2 },
         turnChange: { freq: 392, duration: 200, volume: 0.1 }, // G4 - neutral turn sound
         myTurn: { freq: 659, duration: 300, volume: 0.15 } // E5 - uplifting "your turn" sound
@@ -1110,9 +1125,11 @@ function playSound(type) {
     }
 }
 
-// Subtle, pleasant "trick won" notification - much less annoying
+
+// Sparkling "star shining" notification for trick wins
+// Subtle, pleasant "trick won" notification - very brief and light
 function playCheerfulWinnerSound(sound) {
-    // Single gentle chime instead of ascending notes
+    // Single quick "ting" sound
     try {
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
@@ -1120,22 +1137,20 @@ function playCheerfulWinnerSound(sound) {
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
         
-        // Softer, warmer frequency - not too high or piercing
-        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 - pleasant middle tone
-        oscillator.type = 'triangle'; // Gentle waveform
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 - gentle high note
+        oscillator.type = 'sine'; // Soft, pure tone
         
-        // Much quieter and shorter
-        gainNode.gain.setValueAtTime(sound.volume * 0.4, audioContext.currentTime); // Even quieter
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.02); // Shorter duration
+        // Very quiet and very short
+        gainNode.gain.setValueAtTime(sound.volume * 0.2, audioContext.currentTime); // Much quieter
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.08); // 80ms - very brief
         
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.02);
+        oscillator.stop(audioContext.currentTime + 0.08);
         
     } catch (e) {
         console.log('Winner sound error:', e.message);
     }
 }
-
 
 // Gentle "your turn" notification
 function playMyTurnSound(sound) {
